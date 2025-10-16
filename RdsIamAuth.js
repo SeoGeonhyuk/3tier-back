@@ -1,6 +1,7 @@
 const mysql = require('mysql2/promise');
 const { Signer } = require('@aws-sdk/rds-signer');
 const dotenv = require('dotenv');
+const fs = require('fs');
 
 dotenv.config();
 
@@ -26,6 +27,7 @@ class RdsIamAuthManager {
             region: process.env.AWS_REGION || 'ap-northeast-2',
             // IAM 인증 사용 시
             ssl: process.env.USE_IAM_AUTH === 'true' ? {
+                ca: fs.readFileSync(process.env.CA_PATH),
                 rejectUnauthorized: true
             } : undefined
         };
