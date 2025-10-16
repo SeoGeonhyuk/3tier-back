@@ -1,46 +1,72 @@
 const transactionService = require('./TransactionService');
+const { getInstance } = require('./RdsIamAuth');
 const express = require('express');
 const bodyParser = require('body-parser');
 const cors = require('cors');
 const os = require('os');
 const fetch = require('node-fetch');
-const dbcreds = require('./DbConfig');
-const mysql = require('mysql2');
 
 const app = express();
 const port = 4000;
 
+// RDS IAM Auth Manager 인스턴스
+let dbManager = null;
+let server = null;
+
 // Initialize database and create transactions table if not exists
-function initializeDatabase() {
-    const connection = mysql.createConnection({
-        host: dbcreds.DB_HOST,
-        user: dbcreds.DB_USER,
-        password: dbcreds.DB_PWD,
-        database: dbcreds.DB_DATABASE
-    });
+async function initializeDatabase() {
+    try {
+        console.log('Initializing database...');
 
-    const createTableQuery = `
-        CREATE TABLE IF NOT EXISTS transactions (
-            id INT AUTO_INCREMENT PRIMARY KEY,
-            amount DECIMAL(10, 2) NOT NULL,
-            description VARCHAR(255) NOT NULL,
-            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-        )
-    `;
+        // RDS IAM Auth Manager 초기화
+        dbManager = getInstance();
+        await dbManager.initialize();
 
-    connection.query(createTableQuery, (err, result) => {
-        if (err) {
-            console.error('Error creating transactions table:', err.message);
-            connection.end();
-            return;
-        }
+        // TransactionService에 DB 매니저 설정
+        transactionService.setDbManager(dbManager);
+
+        // 테이블 생성
+        const createTableQuery = `
+            CREATE TABLE IF NOT EXISTS transactions (
+                id INT AUTO_INCREMENT PRIMARY KEY,
+                amount DECIMAL(10, 2) NOT NULL,
+                description VARCHAR(255) NOT NULL,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            )
+        `;
+
+        await dbManager.query(createTableQuery);
         console.log('Transactions table checked/created successfully');
-        connection.end();
-    });
+
+    } catch (err) {
+        console.error('Error initializing database:', err.message);
+        throw err;
+    }
 }
 
-// Initialize database on startup
-initializeDatabase();
+// Graceful shutdown handler
+function setupGracefulShutdown() {
+    const shutdown = async (signal) => {
+        console.log(`\n${signal} received, shutting down gracefully...`);
+
+        // 서버 종료
+        if (server) {
+            server.close(() => {
+                console.log('HTTP server closed');
+            });
+        }
+
+        // DB 매니저 종료
+        if (dbManager) {
+            await dbManager.shutdown();
+        }
+
+        process.exit(0);
+    };
+
+    process.on('SIGTERM', () => shutdown('SIGTERM'));
+    process.on('SIGINT', () => shutdown('SIGINT'));
+}
 
 app.use(bodyParser.urlencoded({ extended: true }));
 app.use(bodyParser.json());
@@ -50,84 +76,159 @@ app.use(cors());
 // =======================================================
 
 //Health Checking
-app.get('/health',(req,res)=>{
-    res.json("This is the health check");
+app.get('/health', (req, res) => {
+    res.json({ status: "healthy", message: "This is the health check" });
 });
 
 // ADD TRANSACTION
-app.post('/transaction', (req,res)=>{
-    var response = "";
-    try{
-        console.log(req.body);
-        console.log(req.body.amount);
-        console.log(req.body.desc);
-        var success = transactionService.addTransaction(req.body.amount,req.body.desc);
-        if (success = 200) res.json({ message: 'added transaction successfully'});
-    }catch (err){
-        res.json({ message: 'something went wrong', error : err.message});
+app.post('/transaction', async (req, res) => {
+    try {
+        console.log('POST /transaction - Body:', req.body);
+        const { amount, desc } = req.body;
+
+        if (!amount || !desc) {
+            return res.status(400).json({
+                message: 'Missing required fields: amount and desc'
+            });
+        }
+
+        await transactionService.addTransaction(amount, desc);
+        res.status(200).json({ message: 'added transaction successfully' });
+
+    } catch (err) {
+        console.error('Error in POST /transaction:', err);
+        res.status(500).json({
+            message: 'something went wrong',
+            error: err.message
+        });
     }
 });
 
 // GET ALL TRANSACTIONS
-app.get('/transaction',(req,res)=>{
-    try{
-        var transactionList = [];
-       transactionService.getAllTransactions(function (results) {
-            console.log("we are in the call back:");
-            for (const row of results) {
-                transactionList.push({ "id": row.id, "amount": row.amount, "description": row.description });
-            }
-            console.log(transactionList);
-            res.statusCode = 200;
-            res.json({"result":transactionList});
+app.get('/transaction', async (req, res) => {
+    try {
+        const results = await transactionService.getAllTransactions();
+
+        const transactionList = results.map(row => ({
+            id: row.id,
+            amount: row.amount,
+            description: row.description,
+            created_at: row.created_at
+        }));
+
+        console.log('Retrieved transactions:', transactionList.length);
+        res.status(200).json({ result: transactionList });
+
+    } catch (err) {
+        console.error('Error in GET /transaction:', err);
+        res.status(500).json({
+            message: "could not get all transactions",
+            error: err.message
         });
-    }catch (err){
-        res.json({message:"could not get all transactions",error: err.message});
     }
 });
 
 //DELETE ALL TRANSACTIONS
-app.delete('/transaction',(req,res)=>{
-    try{
-        transactionService.deleteAllTransactions(function(result){
-            res.statusCode = 200;
-            res.json({message:"delete function execution finished."})
-        })
-    }catch (err){
-        res.json({message: "Deleting all transactions may have failed.", error:err.message});
+app.delete('/transaction', async (req, res) => {
+    try {
+        const result = await transactionService.deleteAllTransactions();
+        res.status(200).json({
+            message: "delete function execution finished.",
+            affectedRows: result.affectedRows
+        });
+
+    } catch (err) {
+        console.error('Error in DELETE /transaction:', err);
+        res.status(500).json({
+            message: "Deleting all transactions may have failed.",
+            error: err.message
+        });
     }
 });
 
 //DELETE ONE TRANSACTION
-app.delete('/transaction/id', (req,res)=>{
-    try{
-        //probably need to do some kind of parameter checking
-        transactionService.deleteTransactionById(req.body.id, function(result){
-            res.statusCode = 200;
-            res.json({message: `transaction with id ${req.body.id} seemingly deleted`});
-        })
-    } catch (err){
-        res.json({message:"error deleting transaction", error: err.message});
+app.delete('/transaction/id', async (req, res) => {
+    try {
+        const { id } = req.body;
+
+        if (!id) {
+            return res.status(400).json({
+                message: 'Missing required field: id'
+            });
+        }
+
+        const result = await transactionService.deleteTransactionById(id);
+        res.status(200).json({
+            message: `transaction with id ${id} seemingly deleted`,
+            affectedRows: result.affectedRows
+        });
+
+    } catch (err) {
+        console.error('Error in DELETE /transaction/id:', err);
+        res.status(500).json({
+            message: "error deleting transaction",
+            error: err.message
+        });
     }
 });
 
 //GET SINGLE TRANSACTION
-app.get('/transaction/id',(req,res)=>{
-    //also probably do some kind of parameter checking here
-    try{
-        transactionService.findTransactionById(req.body.id,function(result){
-            res.statusCode = 200;
-            var id = result[0].id;
-            var amt = result[0].amount;
-            var desc= result[0].desc;
-            res.json({"id":id,"amount":amt,"desc":desc});
+app.get('/transaction/id', async (req, res) => {
+    try {
+        const { id } = req.body;
+
+        if (!id) {
+            return res.status(400).json({
+                message: 'Missing required field: id'
+            });
+        }
+
+        const result = await transactionService.findTransactionById(id);
+
+        if (result.length === 0) {
+            return res.status(404).json({
+                message: `transaction with id ${id} not found`
+            });
+        }
+
+        const transaction = result[0];
+        res.status(200).json({
+            id: transaction.id,
+            amount: transaction.amount,
+            description: transaction.description,
+            created_at: transaction.created_at
         });
 
-    }catch(err){
-        res.json({message:"error retrieving transaction", error: err.message});
+    } catch (err) {
+        console.error('Error in GET /transaction/id:', err);
+        res.status(500).json({
+            message: "error retrieving transaction",
+            error: err.message
+        });
     }
 });
 
-  app.listen(port, () => {
-    console.log(`AB3 backend app listening at http://localhost:${port}`)
-  })
+// Initialize database and start server
+async function startServer() {
+    try {
+        // 데이터베이스 초기화
+        await initializeDatabase();
+        console.log('Database initialization complete');
+
+        // Graceful shutdown 설정
+        setupGracefulShutdown();
+
+        // 서버 시작
+        server = app.listen(port, () => {
+            console.log(`AB3 backend app listening at http://localhost:${port}`);
+            console.log(`IAM Authentication: ${process.env.USE_IAM_AUTH === 'true' ? 'ENABLED' : 'DISABLED'}`);
+        });
+
+    } catch (err) {
+        console.error('Failed to start server:', err);
+        process.exit(1);
+    }
+}
+
+// 서버 시작
+startServer();
