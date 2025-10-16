@@ -8,6 +8,10 @@ const fetch = require('node-fetch');
 
 const app = express();
 const port = 4000;
+const corsOption = {
+    origin: process.env.CORS_ORIGIN,
+    credentials: true
+}
 
 // RDS IAM Auth Manager 인스턴스
 let dbManager = null;
@@ -70,7 +74,7 @@ function setupGracefulShutdown() {
 
 app.use(bodyParser.urlencoded({ extended: true }));
 app.use(bodyParser.json());
-app.use(cors());
+app.use(cors(corsOption));
 
 // ROUTES FOR OUR API
 // =======================================================
