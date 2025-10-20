@@ -79,6 +79,15 @@ app.use(cors(corsOption));
 // ROUTES FOR OUR API
 // =======================================================
 
+// Version Info
+app.get('/', (req, res) => {
+    const packageJson = require('./package.json');
+    res.json({
+        service: "3tier-backend",
+        version: packageJson.version
+    });
+});
+
 //Health Checking
 app.get('/health', (req, res) => {
     res.json({ status: "healthy", message: "This is the health check" });
