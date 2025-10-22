@@ -2,9 +2,7 @@ name: CI/CD
 
 on:
   push:
-    branches: [ main, master, develop ]
-  pull_request:
-    branches: [ main, master, develop ]
+    branches: [ main ]
 
 permissions:
   id-token: write
@@ -54,6 +52,37 @@ jobs:
           aws sts get-caller-identity
           echo "AWS CLI is configured correctly!"
 
+      - name: Create .env file
+        run: |
+          echo "Creating .env file from GitHub Secrets..."
+          cat > .env << EOF
+          # Database Configuration
+          DB_HOST=${{ secrets.DB_HOST }}
+          DB_PORT=${{ secrets.DB_PORT }}
+          DB_USER=${{ secrets.DB_USER }}
+          DB_DATABASE=${{ secrets.DB_DATABASE }}
+
+          # IAM Authentication
+          USE_IAM_AUTH=${{ secrets.USE_IAM_AUTH }}
+
+          # AWS Region
+          AWS_REGION=${{ secrets.AWS_REGION }}
+
+          # Database Password (only required if USE_IAM_AUTH=false)
+          DB_PWD=${{ secrets.DB_PWD }}
+
+          # Connection Pool Configuration
+          DB_POOL_SIZE=${{ secrets.DB_POOL_SIZE || '10' }}
+          DB_QUEUE_LIMIT=${{ secrets.DB_QUEUE_LIMIT || '0' }}
+
+          # SSL/TLS Configuration
+          CA_PATH=${{ secrets.CA_PATH }}
+
+          # CORS Configuration
+          CORS_ORIGIN=${{ secrets.CORS_ORIGIN }}
+          EOF
+          echo ".env file created successfully"
+
       - name: Create deployment package
         run: |
           echo "Creating deployment package..."
@@ -64,6 +93,7 @@ jobs:
             ecosystem.config.js \
             appspec.yml \
             scripts/ \
+            .env \
             -x "*.test.js" "coverage/*" "node_modules/*" ".git/*"
           echo "Deployment package created: deploy-${{ github.sha }}.zip"
 
