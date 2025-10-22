@@ -1,0 +1,44 @@
+name: CI
+
+on:
+  push:
+    branches: [ main]
+
+permissions:
+  id-token: write
+  contents: read
+
+jobs:
+  test-and-deploy:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '18'
+
+      - name: Install Yarn globally
+        run: npm install -g yarn
+
+      - name: Install dependencies
+        run: yarn install
+
+      - name: Run tests
+        run: yarn test
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
+          aws-region: us-east1
+          role-session-name: GitHubActions
+
+      - name: Test AWS CLI
+        run: |
+          echo "Testing AWS CLI configuration..."
+          aws sts get-caller-identity
+          echo "AWS CLI is configured correctly!"
