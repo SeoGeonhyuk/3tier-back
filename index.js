@@ -79,12 +79,27 @@ app.use(cors(corsOption));
 // ROUTES FOR OUR API
 // =======================================================
 
+// Helper function to get instance IP
+function getInstanceIp() {
+    const interfaces = os.networkInterfaces();
+    for (const name of Object.keys(interfaces)) {
+        for (const iface of interfaces[name]) {
+            // Skip internal (loopback) and non-IPv4 addresses
+            if (iface.family === 'IPv4' && !iface.internal) {
+                return iface.address;
+            }
+        }
+    }
+    return 'localhost';
+}
+
 // Version Info
 app.get('/', (req, res) => {
     const packageJson = require('./package.json');
     res.json({
         service: "3tier-backend",
-        version: packageJson.version
+        version: packageJson.version,
+        instanceIp: getInstanceIp()
     });
 });
 
