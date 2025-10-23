@@ -1,3 +1,13 @@
 .env
 node_modules/
 coverage/
+
+# Yarn Berry - Zero Install
+# .yarn/cache는 Git에 올리지 않음 (CI에서 생성하여 S3에 포함)
+.yarn/*
+!.yarn/patches
+!.yarn/plugins
+!.yarn/releases
+!.yarn/sdks
+!.yarn/versions
+.yarn/install-state.gz
