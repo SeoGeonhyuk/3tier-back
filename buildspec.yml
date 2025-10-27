@@ -45,7 +45,6 @@ phases:
       - printf '[{"name":"3tier-back","imageUri":"%s"}]' $ECR_REPOSITORY_URI:$IMAGE_TAG > imagedefinitions.json
       - cat imagedefinitions.json
       - echo Image pushed successfully to ECR
-      - echo "Note: Environment variables (DB_HOST, DB_USER, etc.) should be configured in ECS Task Definition or container runtime"
 
 artifacts:
   files:
