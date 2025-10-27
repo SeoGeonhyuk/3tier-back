@@ -2,10 +2,10 @@ version: 0.2
 
 env:
   variables:
-    AWS_REGION: us-east-1
+    AWS_REGION: ap-northeast-2
     DOCKER_BUILDKIT: 1
   parameter-store:
-    ECR_REPOSITORY_URI: /codebuild/ecr/3tier-back
+    ECR_REPOSITORY_URI: /sgh/was/ecr/url
 
 phases:
   pre_build:
