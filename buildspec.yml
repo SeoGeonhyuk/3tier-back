@@ -6,6 +6,7 @@ env:
     DOCKER_BUILDKIT: 1
   parameter-store:
     ECR_REPOSITORY_URI: /sgh/was/ecr/url
+    ECR_WAS_REPOSITORY_NAME: /sgh/was/ecr/name
 
 phases:
   pre_build:
@@ -13,7 +14,7 @@ phases:
       - echo Logging in to Amazon ECR...
       - aws ecr get-login-password --region $AWS_REGION | docker login --username AWS --password-stdin $ECR_REPOSITORY_URI
       - echo Getting repository name from ECR URI...
-      - REPOSITORY_NAME=$(echo $ECR_REPOSITORY_URI | cut -d'/' -f2)
+      - REPOSITORY_NAME=$ECR_WAS_REPOSITORY_NAME
       - echo Repository name is $REPOSITORY_NAME
       - COMMIT_HASH=$(echo $CODEBUILD_RESOLVED_SOURCE_VERSION | cut -c 1-7)
       - IMAGE_TAG=${COMMIT_HASH:=latest}
