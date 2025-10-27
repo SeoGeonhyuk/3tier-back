@@ -1,46 +1,54 @@
-# Node modules
-node_modules
-npm-debug.log
-yarn-error.log
-
-# Environment files
-.env
-.env.local
-.env.*.local
-
 # Git
 .git
 .gitignore
+.gitattributes
+.github
 
-# Documentation
-README.md
-*.md
+# CI/CD (빌드에 불필요)
+.gitlab-ci.yml
+.travis.yml
+.circleci
 
-# IDE and editor files
+# Docker (재귀 복사 방지)
+Dockerfile*
+docker-compose*.yml
+.dockerignore
+
+# IDE and editors
 .vscode
 .idea
 *.swp
 *.swo
+*.swn
 *~
 .DS_Store
+.project
+.classpath
+.settings
+.code-workspace
 
-# Test files
-test
-tests
-*.test.js
-*.spec.js
-coverage
+# Documentation (빌드에 불필요)
+README.md
+CHANGELOG.md
+LICENSE
+CONTRIBUTING.md
+docs
 
-# CI/CD
-.github
-.gitlab-ci.yml
-.travis.yml
+# OS files
+Thumbs.db
+Desktop.ini
 
-# Docker files
-Dockerfile
-.dockerignore
-docker-compose.yml
+# Temporary files
+tmp
+temp
+*.tmp
 
-# Logs
-logs
-*.log
+# AWS (보안)
+.aws
+
+# 주의: 아래 항목들은 제외하지 않음
+# - node_modules (Zero-Install이므로 .yarn/cache 사용)
+# - *.test.js (tester 스테이지에서 필요)
+# - coverage (테스트 실행 중 생성되므로 상관없음)
+# - .env 파일 (이미 .env.example만 있고 .env는 git에 없음)
+# - logs (컨테이너에서 생성)
