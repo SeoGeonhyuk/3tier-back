@@ -1,0 +1,52 @@
+version: 0.2
+
+env:
+  variables:
+    AWS_REGION: us-east-1
+    DOCKER_BUILDKIT: 1
+  parameter-store:
+    ECR_REPOSITORY_URI: /codebuild/ecr/3tier-back
+
+phases:
+  pre_build:
+    commands:
+      - echo Logging in to Amazon ECR...
+      - aws ecr get-login-password --region $AWS_REGION | docker login --username AWS --password-stdin $ECR_REPOSITORY_URI
+      - echo Getting repository name from ECR URI...
+      - REPOSITORY_NAME=$(echo $ECR_REPOSITORY_URI | cut -d'/' -f2)
+      - echo Repository name is $REPOSITORY_NAME
+      - COMMIT_HASH=$(echo $CODEBUILD_RESOLVED_SOURCE_VERSION | cut -c 1-7)
+      - IMAGE_TAG=${COMMIT_HASH:=latest}
+      - echo Image tag is $IMAGE_TAG
+      - echo Pulling previous image for layer caching...
+      - docker pull $ECR_REPOSITORY_URI:latest || true
+
+  build:
+    commands:
+      - echo Build started on `date`
+      - echo Building the Docker image with BuildKit cache...
+      - |
+        docker buildx create --use --name builder --driver docker-container || docker buildx use builder
+      - |
+        docker buildx build \
+          --cache-from type=registry,ref=$ECR_REPOSITORY_URI:buildcache \
+          --cache-to type=registry,ref=$ECR_REPOSITORY_URI:buildcache,mode=max \
+          --target production \
+          -t $REPOSITORY_NAME:latest \
+          -t $ECR_REPOSITORY_URI:latest \
+          -t $ECR_REPOSITORY_URI:$IMAGE_TAG \
+          --push \
+          .
+      - echo Build completed on `date`
+
+  post_build:
+    commands:
+      - echo Writing image definitions file...
+      - printf '[{"name":"3tier-back","imageUri":"%s"}]' $ECR_REPOSITORY_URI:$IMAGE_TAG > imagedefinitions.json
+      - cat imagedefinitions.json
+      - echo Image pushed successfully to ECR
+      - echo "Note: Environment variables (DB_HOST, DB_USER, etc.) should be configured in ECS Task Definition or container runtime"
+
+artifacts:
+  files:
+    - imagedefinitions.json
