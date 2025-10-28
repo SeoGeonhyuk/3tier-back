@@ -1,9 +1,7 @@
 const mysql = require('mysql2/promise');
 const { Signer } = require('@aws-sdk/rds-signer');
-const dotenv = require('dotenv');
 const fs = require('fs');
 
-dotenv.config();
 
 /**
  * RDS IAM 인증을 사용한 데이터베이스 커넥션 풀 관리자
