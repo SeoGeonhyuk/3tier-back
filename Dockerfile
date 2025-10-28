@@ -76,7 +76,12 @@ RUN --mount=type=cache,target=/home/nodejs/.yarn,sharing=locked,uid=1001,gid=100
     --mount=type=cache,target=/app/.yarn/cache,sharing=locked,uid=1001,gid=1001 \
     yarn workspaces focus --production
 
-RUN curl -o global-bundle.pem https://truststore.pki.rds.amazonaws.com/global/global-bundle.pem
+USER root
+RUN apk add --no-cache wget && \
+    wget https://truststore.pki.rds.amazonaws.com/global/global-bundle.pem && \
+    chown nodejs:nodejs global-bundle.pem && \
+    apk del wget
+USER nodejs
 
 # 애플리케이션 소스 복사 (테스트 파일 제외)
 COPY --chown=nodejs:nodejs index.js ./
