@@ -97,9 +97,5 @@ ENV NODE_ENV=production
 # 포트 노출
 EXPOSE 4000
 
-# 헬스체크 추가
-HEALTHCHECK --interval=30s --timeout=3s --start-period=10s --retries=3 \
-  CMD node -e "require('http').get('http://localhost:4000/health', (r) => {process.exit(r.statusCode === 200 ? 0 : 1)})" || exit 1
-
 # PM2로 애플리케이션 실행
 CMD ["pm2-runtime", "start", "ecosystem.config.js", "--env", "production"]
