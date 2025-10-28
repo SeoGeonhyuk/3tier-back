@@ -1,0 +1,124 @@
+name: Deploy to AWS ECS
+
+on:
+  push:
+    branches:
+      - main
+
+env:
+  AWS_REGION: ${{ secrets.AWS_REGION }}
+  ECR_REPOSITORY: ${{ secrets.ECR_REPOSITORY }}
+  ECS_CLUSTER: ${{ secrets.ECS_CLUSTER }}
+  ECS_SERVICE: ${{ secrets.ECS_SERVICE }}
+
+jobs:
+  test-build-deploy:
+    runs-on: ubuntu-latest
+    permissions:
+      id-token: write
+      contents: read
+
+    steps:
+      # 1. 코드 체크아웃
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      # 2. Node.js 환경 설정
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      # 3. Corepack 활성화 (Yarn Berry 사용)
+      - name: Enable Corepack
+        run: corepack enable
+
+      # 4. Yarn 캐시 설정
+      - name: Get Yarn cache directory
+        id: yarn-cache-dir
+        run: echo "dir=$(yarn config get cacheFolder)" >> $GITHUB_OUTPUT
+
+      - name: Cache Yarn dependencies
+        uses: actions/cache@v4
+        with:
+          path: |
+            ${{ steps.yarn-cache-dir.outputs.dir }}
+            .yarn/cache
+          key: ${{ runner.os }}-yarn-${{ hashFiles('**/yarn.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-yarn-
+
+      # 5. 의존성 설치
+      - name: Install dependencies
+        run: yarn install --immutable
+
+      # 6. 테스트 실행
+      - name: Run tests
+        run: yarn test:ci
+
+      # 7. AWS 인증 (OIDC)
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      # 8. ECR 로그인
+      - name: Login to Amazon ECR
+        id: login-ecr
+        uses: aws-actions/amazon-ecr-login@v2
+
+      # 9. Docker 이미지 빌드 및 푸시
+      - name: Build and push Docker image
+        env:
+          IMAGE_TAG: ${{ github.sha }}
+          SHORT_SHA: ${{ github.sha }}
+        run: |
+          # 커밋 해시 7자리 추출
+          SHORT_SHA=$(echo ${{ github.sha }} | cut -c1-7)
+
+          # Docker BuildKit 활성화
+          export DOCKER_BUILDKIT=1
+
+          # BuildX 빌더 생성 (이미 존재하면 재사용)
+          docker buildx create --use --name builder --driver docker-container || docker buildx use builder
+
+          # 이미지 빌드 및 푸시
+          docker buildx build \
+            --cache-from type=registry,ref=${{ env.ECR_REPOSITORY }}:buildcache \
+            --cache-to type=registry,ref=${{ env.ECR_REPOSITORY }}:buildcache,mode=max \
+            --target production \
+            -t ${{ env.ECR_REPOSITORY }}:latest \
+            -t ${{ env.ECR_REPOSITORY }}:${SHORT_SHA} \
+            --push \
+            .
+
+          echo "Image pushed: ${{ env.ECR_REPOSITORY }}:latest"
+          echo "Image pushed: ${{ env.ECR_REPOSITORY }}:${SHORT_SHA}"
+
+      # 10. ECS 서비스 강제 재배포 (Blue/Green)
+      - name: Force ECS service deployment
+        run: |
+          echo "Forcing new deployment for ECS service..."
+          aws ecs update-service \
+            --cluster ${{ env.ECS_CLUSTER }} \
+            --service ${{ env.ECS_SERVICE }} \
+            --force-new-deployment \
+            --region ${{ env.AWS_REGION }}
+
+          echo "Deployment triggered successfully!"
+          echo "ECS Blue/Green deployment will be handled automatically by AWS."
+
+      # 11. 배포 완료 알림
+      - name: Deployment summary
+        run: |
+          echo "=========================================="
+          echo "Deployment Summary"
+          echo "=========================================="
+          echo "Region: ${{ env.AWS_REGION }}"
+          echo "ECR Repository: ${{ env.ECR_REPOSITORY }}"
+          echo "Image Tag: latest, $(echo ${{ github.sha }} | cut -c1-7)"
+          echo "ECS Cluster: ${{ env.ECS_CLUSTER }}"
+          echo "ECS Service: ${{ env.ECS_SERVICE }}"
+          echo "Commit: ${{ github.sha }}"
+          echo "=========================================="
