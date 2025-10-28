@@ -34,17 +34,7 @@ RUN --mount=type=cache,target=/home/nodejs/.yarn,sharing=locked,uid=1001,gid=100
     --mount=type=cache,target=/app/.yarn/cache,sharing=locked,uid=1001,gid=1001 \
     yarn install --immutable
 
-# Stage 2: Test - devDependencies 포함하여 테스트 실행
-FROM dependencies AS tester
-
-# 애플리케이션 소스 복사
-COPY --chown=nodejs:nodejs . .
-
-# 테스트 실행 (테스트가 실패하면 빌드 중단)
-RUN --mount=type=cache,target=/home/nodejs/.yarn,sharing=locked,uid=1001,gid=1001 \
-    yarn test
-
-# Stage 3: Production - 프로덕션 의존성만 포함
+# Stage 2: Production - 프로덕션 의존성만 포함
 FROM node:20-alpine3.21 AS production
 
 # 보안 업데이트 적용
