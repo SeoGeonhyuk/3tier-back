@@ -85,7 +85,6 @@ RUN mkdir -p /app/logs && chown -R nodejs:nodejs /app/logs
 # RDS CA 인증서 다운로드
 RUN apk add --no-cache wget && \
     wget -O /app/global-bundle.pem https://truststore.pki.rds.amazonaws.com/global/global-bundle.pem && \
-    apk del wget && \
     chown nodejs:nodejs /app/global-bundle.pem && \
     chmod 644 /app/global-bundle.pem && \
     ls -la /app/global-bundle.pem
