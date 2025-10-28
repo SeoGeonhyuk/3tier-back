@@ -76,13 +76,6 @@ RUN --mount=type=cache,target=/home/nodejs/.yarn,sharing=locked,uid=1001,gid=100
     --mount=type=cache,target=/app/.yarn/cache,sharing=locked,uid=1001,gid=1001 \
     yarn workspaces focus --production
 
-USER root
-RUN apk add --no-cache wget && \
-    wget https://truststore.pki.rds.amazonaws.com/global/global-bundle.pem && \
-    chown nodejs:nodejs global-bundle.pem && \
-    apk del wget
-USER nodejs
-
 # 애플리케이션 소스 복사 (테스트 파일 제외)
 COPY --chown=nodejs:nodejs index.js ./
 COPY --chown=nodejs:nodejs DbConfig.js ./
@@ -98,6 +91,12 @@ USER nodejs
 # 로그 디렉토리 생성
 USER root
 RUN mkdir -p /app/logs && chown -R nodejs:nodejs /app/logs
+
+# RDS CA 인증서 다운로드
+RUN apk add --no-cache wget && \
+    wget -O /app/global-bundle.pem https://truststore.pki.rds.amazonaws.com/global/global-bundle.pem && \
+    chown nodejs:nodejs /app/global-bundle.pem && \
+    apk del wget
 USER nodejs
 
 # 환경 변수 선언 (컨테이너 실행 시 주입될 예정)
