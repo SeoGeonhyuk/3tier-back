@@ -1,0 +1,114 @@
+{
+  "family": "sgh-was-task",
+  "networkMode": "awsvpc",
+  "requiresCompatibilities": ["FARGATE"],
+  "cpu": "1024",
+  "memory": "3072",
+  "executionRoleArn": "<EXECUTION_ROLE_ARN>",
+  "taskRoleArn": "<TASK_ROLE_ARN>",
+  "enableFaultInjection": true,
+  "runtimePlatform": {
+    "cpuArchitecture": "X86_64",
+    "operatingSystemFamily": "LINUX"
+  },
+  "containerDefinitions": [
+    {
+      "name": "was",
+      "image": "<IMAGE>",
+      "cpu": 0,
+      "essential": true,
+      "portMappings": [
+        {
+          "appProtocol": "http",
+          "containerPort": 4000,
+          "hostPort": 4000,
+          "name": "was-4000-tcp",
+          "protocol": "tcp"
+        }
+      ],
+      "environment": [],
+      "environmentFiles": [],
+      "secrets": [
+        {
+          "name": "AWS_REGION",
+          "valueFrom": "<SSM_ARN_AWS_REGION>"
+        },
+        {
+          "name": "DB_PORT",
+          "valueFrom": "<SSM_ARN_DB_PORT>"
+        },
+        {
+          "name": "DB_USER",
+          "valueFrom": "<SSM_ARN_DB_USER>"
+        },
+        {
+          "name": "USE_IAM_AUTH",
+          "valueFrom": "<SSM_ARN_USE_IAM_AUTH>"
+        },
+        {
+          "name": "CA_PATH",
+          "valueFrom": "<SSM_ARN_CA_PATH>"
+        },
+        {
+          "name": "DB_HOST",
+          "valueFrom": "<SSM_ARN_DB_HOST>"
+        },
+        {
+          "name": "CORS_ORIGIN",
+          "valueFrom": "<SSM_ARN_CORS_ORIGIN>"
+        },
+        {
+          "name": "DB_DATABASE",
+          "valueFrom": "<SSM_ARN_DB_DATABASE>"
+        }
+      ],
+      "logConfiguration": {
+        "logDriver": "awslogs",
+        "options": {
+          "awslogs-group": "<CLOUDWATCH_LOG_GROUP_WAS>",
+          "awslogs-create-group": "true",
+          "awslogs-region": "ap-northeast-2",
+          "awslogs-stream-prefix": "ecs"
+        },
+        "secretOptions": []
+      },
+      "healthCheck": {
+        "command": ["CMD-SHELL", "wget http://localhost:4000/health || exit 1"],
+        "interval": 60,
+        "timeout": 5,
+        "retries": 3,
+        "startPeriod": 60
+      },
+      "mountPoints": [],
+      "systemControls": [],
+      "ulimits": [],
+      "volumesFrom": []
+    },
+    {
+      "name": "aws-otel-collector",
+      "image": "public.ecr.aws/aws-observability/aws-otel-collector:v0.45.1",
+      "cpu": 0,
+      "essential": true,
+      "command": ["--config=/etc/ecs/ecs-cloudwatch.yaml"],
+      "environment": [],
+      "logConfiguration": {
+        "logDriver": "awslogs",
+        "options": {
+          "awslogs-group": "<CLOUDWATCH_LOG_GROUP_OTEL>",
+          "mode": "non-blocking",
+          "awslogs-create-group": "true",
+          "max-buffer-size": "25m",
+          "awslogs-region": "ap-northeast-2",
+          "awslogs-stream-prefix": "ecs"
+        }
+      },
+      "mountPoints": [],
+      "portMappings": [],
+      "systemControls": [],
+      "volumesFrom": []
+    }
+  ],
+  "volumes": [],
+  "placementConstraints": [],
+  "tags": []
+}

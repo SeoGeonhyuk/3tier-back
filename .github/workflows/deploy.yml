@@ -115,20 +115,49 @@ jobs:
           cache-from: type=registry,ref=${{ env.ECR_REPOSITORY }}:buildcache
           cache-to: type=registry,ref=${{ env.ECR_REPOSITORY }}:buildcache,mode=max
 
-      # 12. ECS 서비스 재배포 (Blue/Green)
-      - name: Force ECS service deployment
+      # 12. ARN 플레이스홀더 치환 (보안 강화)
+      - name: Replace ARN placeholders in task definition
         run: |
-          echo "Forcing new deployment for ECS service..."
-          aws ecs update-service \
-            --cluster ${{ env.ECS_CLUSTER }} \
-            --service ${{ env.ECS_SERVICE }} \
-            --force-new-deployment \
-            --region ${{ env.AWS_REGION }}
+          # IAM Role ARNs
+          sed -i 's|<EXECUTION_ROLE_ARN>|${{ secrets.EXECUTION_ROLE_ARN }}|g' task-definition.json
+          sed -i 's|<TASK_ROLE_ARN>|${{ secrets.TASK_ROLE_ARN }}|g' task-definition.json
 
-          echo "Deployment triggered successfully!"
-          echo "ECS Blue/Green deployment will be handled automatically by AWS."
+          # SSM Parameter ARNs
+          sed -i 's|<SSM_ARN_AWS_REGION>|${{ secrets.SSM_ARN_AWS_REGION }}|g' task-definition.json
+          sed -i 's|<SSM_ARN_DB_PORT>|${{ secrets.SSM_ARN_DB_PORT }}|g' task-definition.json
+          sed -i 's|<SSM_ARN_DB_USER>|${{ secrets.SSM_ARN_DB_USER }}|g' task-definition.json
+          sed -i 's|<SSM_ARN_USE_IAM_AUTH>|${{ secrets.SSM_ARN_USE_IAM_AUTH }}|g' task-definition.json
+          sed -i 's|<SSM_ARN_CA_PATH>|${{ secrets.SSM_ARN_CA_PATH }}|g' task-definition.json
+          sed -i 's|<SSM_ARN_DB_HOST>|${{ secrets.SSM_ARN_DB_HOST }}|g' task-definition.json
+          sed -i 's|<SSM_ARN_CORS_ORIGIN>|${{ secrets.SSM_ARN_CORS_ORIGIN }}|g' task-definition.json
+          sed -i 's|<SSM_ARN_DB_DATABASE>|${{ secrets.SSM_ARN_DB_DATABASE }}|g' task-definition.json
 
-      # 13. 배포 완료 알림
+          # CloudWatch Log Groups
+          sed -i 's|<CLOUDWATCH_LOG_GROUP_WAS>|${{ secrets.CLOUDWATCH_LOG_GROUP_WAS }}|g' task-definition.json
+          sed -i 's|<CLOUDWATCH_LOG_GROUP_OTEL>|${{ secrets.CLOUDWATCH_LOG_GROUP_OTEL }}|g' task-definition.json
+
+          echo "✅ All ARN placeholders replaced successfully"
+
+      # 13. ECS 태스크 정의 업데이트 (커밋 해시 기반)
+      - name: Fill in the new image ID in the Amazon ECS task definition
+        id: task-def
+        uses: aws-actions/amazon-ecs-render-task-definition@v1
+        with:
+          task-definition: task-definition.json
+          container-name: was
+          image: ${{ env.ECR_REPOSITORY }}:${{ steps.vars.outputs.short_sha }}
+
+      # 14. ECS 서비스 배포 (Blue/Green)
+      - name: Deploy Amazon ECS task definition
+        id: ecs-deploy
+        uses: aws-actions/amazon-ecs-deploy-task-definition@v2
+        with:
+          task-definition: ${{ steps.task-def.outputs.task-definition }}
+          service: ${{ env.ECS_SERVICE }}
+          cluster: ${{ env.ECS_CLUSTER }}
+          wait-for-service-stability: false
+
+      # 15. 배포 완료 알림
       - name: Deployment summary
         run: |
           echo "=========================================="
@@ -138,7 +167,15 @@ jobs:
           echo "ECR Repository: ${{ env.ECR_REPOSITORY }}"
           echo "Image Digest: ${{ steps.docker_build.outputs.digest }}"
           echo "Image Tags: latest, ${{ steps.vars.outputs.short_sha }}"
+          echo "Deployed Image: ${{ env.ECR_REPOSITORY }}:${{ steps.vars.outputs.short_sha }}"
           echo "ECS Cluster: ${{ env.ECS_CLUSTER }}"
           echo "ECS Service: ${{ env.ECS_SERVICE }}"
-          echo "Commit: ${{ github.sha }}"
+          echo "Task Definition ARN: ${{ steps.ecs-deploy.outputs.task-definition-arn }}"
+          echo "Commit SHA: ${{ github.sha }}"
+          echo "Short SHA: ${{ steps.vars.outputs.short_sha }}"
+          echo "=========================================="
+          echo ""
+          echo "✅ 커밋 해시 기반 배포 완료!"
+          echo "📦 배포된 이미지: ${{ steps.vars.outputs.short_sha }}"
+          echo "🔄 롤백 시 이전 Task Definition Revision을 사용하세요."
           echo "=========================================="
