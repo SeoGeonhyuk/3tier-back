@@ -83,29 +83,6 @@
       "systemControls": [],
       "ulimits": [],
       "volumesFrom": []
-    },
-    {
-      "name": "aws-otel-collector",
-      "image": "public.ecr.aws/aws-observability/aws-otel-collector:v0.45.1",
-      "cpu": 0,
-      "essential": true,
-      "command": ["--config=/etc/ecs/ecs-cloudwatch.yaml"],
-      "environment": [],
-      "logConfiguration": {
-        "logDriver": "awslogs",
-        "options": {
-          "awslogs-group": "/ecs/ecs-aws-otel-sidecar-collector",
-          "mode": "non-blocking",
-          "awslogs-create-group": "true",
-          "max-buffer-size": "25m",
-          "awslogs-region": "ap-northeast-2",
-          "awslogs-stream-prefix": "ecs"
-        }
-      },
-      "mountPoints": [],
-      "portMappings": [],
-      "systemControls": [],
-      "volumesFrom": []
     }
   ],
   "volumes": [],
