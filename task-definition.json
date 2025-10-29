@@ -94,7 +94,7 @@
       "logConfiguration": {
         "logDriver": "awslogs",
         "options": {
-          "awslogs-group": "<CLOUDWATCH_LOG_GROUP_OTEL>",
+          "awslogs-group": "/ecs/ecs-aws-otel-sidecar-collector",
           "mode": "non-blocking",
           "awslogs-create-group": "true",
           "max-buffer-size": "25m",

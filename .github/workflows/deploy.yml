@@ -34,7 +34,6 @@ jobs:
               - 'Dockerfile'
               - '.dockerignore'
 
-
   test-build-deploy:
     needs: check-changes
     if: needs.check-changes.outputs.should-deploy == 'true'
@@ -132,10 +131,6 @@ jobs:
           sed -i 's|<SSM_ARN_DB_HOST>|${{ secrets.SSM_ARN_DB_HOST }}|g' task-definition.json
           sed -i 's|<SSM_ARN_CORS_ORIGIN>|${{ secrets.SSM_ARN_CORS_ORIGIN }}|g' task-definition.json
           sed -i 's|<SSM_ARN_DB_DATABASE>|${{ secrets.SSM_ARN_DB_DATABASE }}|g' task-definition.json
-
-          # CloudWatch Log Groups
-          sed -i 's|<CLOUDWATCH_LOG_GROUP_WAS>|${{ secrets.CLOUDWATCH_LOG_GROUP_WAS }}|g' task-definition.json
-          sed -i 's|<CLOUDWATCH_LOG_GROUP_OTEL>|${{ secrets.CLOUDWATCH_LOG_GROUP_OTEL }}|g' task-definition.json
 
           echo "✅ All ARN placeholders replaced successfully"
 
