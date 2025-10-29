@@ -65,7 +65,7 @@
       "logConfiguration": {
         "logDriver": "awslogs",
         "options": {
-          "awslogs-group": "<CLOUDWATCH_LOG_GROUP_WAS>",
+          "awslogs-group": "/ecs/sgh-was-task",
           "awslogs-create-group": "true",
           "awslogs-region": "ap-northeast-2",
           "awslogs-stream-prefix": "ecs"
