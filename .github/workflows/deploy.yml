@@ -26,7 +26,12 @@ jobs:
         with:
           filters: |
             app:
-              - '!.github/**'
+              - 'src/**'
+              - 'package.json'
+              - 'yarn.lock'
+              - 'tsconfig.json'
+              - 'Dockerfile'
+              - '.dockerignore'
 
   test-build-deploy:
     needs: check-changes
@@ -86,35 +91,30 @@ jobs:
         id: login-ecr
         uses: aws-actions/amazon-ecr-login@v2
 
-      # 9. Docker 이미지 빌드 및 푸시
+      # 9. Docker Buildx 설정
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      # 10. 커밋 해시 추출
+      - name: Extract short SHA
+        id: vars
+        run: echo "short_sha=$(echo ${{ github.sha }} | cut -c1-7)" >> $GITHUB_OUTPUT
+
+      # 11. Docker 이미지 빌드 및 푸시
       - name: Build and push Docker image
-        env:
-          IMAGE_TAG: ${{ github.sha }}
-          SHORT_SHA: ${{ github.sha }}
-        run: |
-          # 커밋 해시 7자리 추출
-          SHORT_SHA=$(echo ${{ github.sha }} | cut -c1-7)
+        id: docker_build
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          push: true
+          target: production
+          tags: |
+            ${{ env.ECR_REPOSITORY }}:latest
+            ${{ env.ECR_REPOSITORY }}:${{ steps.vars.outputs.short_sha }}
+          cache-from: type=registry,ref=${{ env.ECR_REPOSITORY }}:buildcache
+          cache-to: type=registry,ref=${{ env.ECR_REPOSITORY }}:buildcache,mode=max
 
-          # Docker BuildKit 활성화
-          export DOCKER_BUILDKIT=1
-
-          # BuildX 빌더 생성 (이미 존재하면 재사용)
-          docker buildx create --use --name builder --driver docker-container || docker buildx use builder
-
-          # 이미지 빌드 및 푸시
-          docker buildx build \
-            --cache-from type=registry,ref=${{ env.ECR_REPOSITORY }}:buildcache \
-            --cache-to type=registry,ref=${{ env.ECR_REPOSITORY }}:buildcache,mode=max \
-            --target production \
-            -t ${{ env.ECR_REPOSITORY }}:latest \
-            -t ${{ env.ECR_REPOSITORY }}:${SHORT_SHA} \
-            --push \
-            .
-
-          echo "Image pushed: ${{ env.ECR_REPOSITORY }}:latest"
-          echo "Image pushed: ${{ env.ECR_REPOSITORY }}:${SHORT_SHA}"
-
-      # 10. ECS 서비스 강제 재배포 (Blue/Green)
+      # 12. ECS 서비스 재배포 (Blue/Green)
       - name: Force ECS service deployment
         run: |
           echo "Forcing new deployment for ECS service..."
@@ -127,7 +127,7 @@ jobs:
           echo "Deployment triggered successfully!"
           echo "ECS Blue/Green deployment will be handled automatically by AWS."
 
-      # 11. 배포 완료 알림
+      # 13. 배포 완료 알림
       - name: Deployment summary
         run: |
           echo "=========================================="
@@ -135,7 +135,8 @@ jobs:
           echo "=========================================="
           echo "Region: ${{ env.AWS_REGION }}"
           echo "ECR Repository: ${{ env.ECR_REPOSITORY }}"
-          echo "Image Tag: latest, $(echo ${{ github.sha }} | cut -c1-7)"
+          echo "Image Digest: ${{ steps.docker_build.outputs.digest }}"
+          echo "Image Tags: latest, ${{ steps.vars.outputs.short_sha }}"
           echo "ECS Cluster: ${{ env.ECS_CLUSTER }}"
           echo "ECS Service: ${{ env.ECS_SERVICE }}"
           echo "Commit: ${{ github.sha }}"
