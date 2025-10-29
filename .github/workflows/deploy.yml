@@ -34,6 +34,7 @@ jobs:
               - 'Dockerfile'
               - '.dockerignore'
 
+
   test-build-deploy:
     needs: check-changes
     if: needs.check-changes.outputs.should-deploy == 'true'
