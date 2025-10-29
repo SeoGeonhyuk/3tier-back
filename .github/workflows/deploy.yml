@@ -26,6 +26,7 @@ jobs:
         with:
           filters: |
             app:
+              - '.github/workflows/deploy.yml'
               - 'src/**'
               - 'package.json'
               - 'yarn.lock'
